@@ -199,6 +199,8 @@ def inspect_manifest(path: Path, root: Path) -> tuple[list[dict[str, Any]], list
     """
     label = path.relative_to(root).as_posix()
     try:
+        if path.is_symlink() or not path.is_file():
+            return [], [f"Skipped non-regular manifest: {label}"]
         if path.stat().st_size > MAX_FILE_BYTES:
             return [], [f"Skipped oversized manifest: {label}"]
         data = json.loads(path.read_text(encoding="utf-8"))

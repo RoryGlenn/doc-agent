@@ -7,6 +7,10 @@ test('documentation page loads and has no detected accessibility violations', as
   if (!target) {
     throw new Error('Set DOC_AGENT_BASE_URL to the documentation preview page you intend to check.');
   }
+  const readySelector = process.env.DOC_AGENT_READY_SELECTOR?.trim();
+  if (!readySelector) {
+    throw new Error('Set DOC_AGENT_READY_SELECTOR to a unique element visible only when documentation content is ready.');
+  }
   const url = new URL(target);
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new Error('DOC_AGENT_BASE_URL must use http or https.');
@@ -14,7 +18,7 @@ test('documentation page loads and has no detected accessibility violations', as
   const response = await page.goto(url.href, { waitUntil: 'domcontentloaded' });
   expect(response, 'The page must return an HTTP response').not.toBeNull();
   expect(response.ok(), 'The preview should return a successful HTTP status').toBeTruthy();
-  await expect(page.locator('body')).toBeVisible();
+  await page.locator(readySelector).waitFor({ state: 'visible', timeout: 10_000 });
   const screenshotPath = testInfo.outputPath('rendered-page.png');
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach('rendered-page', {

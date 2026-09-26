@@ -3,11 +3,75 @@
 from __future__ import annotations
 
 import argparse
+import os
+import stat
 import sys
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
 IGNORED_DIRS = {"node_modules", "__pycache__", "test-results", "playwright-report", ".cache"}
+
+
+def source_files(source_root: Path) -> list[Path]:
+    """Enumerate a complete regular-file package without following internal links.
+
+    Parameters
+    ----------
+    source_root : Path
+        The package's .github directory.
+
+    Returns
+    -------
+    list[Path]
+        Agent and skill files in deterministic order.
+
+    Raises
+    ------
+    ValueError
+        If an internal source path is linked or has an unsupported type.
+    OSError
+        If a required source directory or file cannot be inspected.
+    """
+    skill_root = source_root / "skills/doc-agent"
+    for directory in (
+        source_root,
+        source_root / "agents",
+        source_root / "skills",
+        skill_root,
+    ):
+        if directory.is_symlink():
+            raise ValueError(f"Package contains a symlink: {directory}")
+        if not directory.is_dir():
+            raise ValueError(f"Package is missing a source directory: {directory}")
+
+    agent = source_root / "agents/doc-agent.agent.md"
+    entrypoints = (agent, skill_root / "SKILL.md")
+    if not all(path.is_file() and not path.is_symlink() for path in entrypoints):
+        raise ValueError("Package is missing its agent or skill entrypoint")
+
+    def fail_scan(error: OSError) -> None:
+        """Abort source preflight when enumeration is incomplete."""
+        raise error
+
+    files = [agent]
+    for folder, directories, filenames in os.walk(skill_root, onerror=fail_scan, followlinks=False):
+        current = Path(folder)
+        directories[:] = sorted(name for name in directories if name not in IGNORED_DIRS)
+        for name in directories:
+            directory = current / name
+            if directory.is_symlink():
+                raise ValueError(f"Package contains a symlink: {directory}")
+        for name in sorted(filenames):
+            if name in IGNORED_DIRS or name.endswith(".pyc"):
+                continue
+            path = current / name
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                raise ValueError(f"Package contains a symlink: {path}")
+            if not stat.S_ISREG(mode):
+                raise ValueError(f"Package contains a non-regular file: {path}")
+            files.append(path)
+    return files
 
 
 def install_files(source: Path, destination: Path, apply: bool = False) -> list[str]:
@@ -39,24 +103,9 @@ def install_files(source: Path, destination: Path, apply: bool = False) -> list[
     # Resolve system aliases such as macOS /var, while retaining the selected root.
     destination = destination.parent.resolve() / destination.name
     source_root = source / ".github"
-    entrypoints = (
-        source_root / "agents/doc-agent.agent.md",
-        source_root / "skills/doc-agent/SKILL.md",
-    )
-    if not all(path.is_file() and not path.is_symlink() for path in entrypoints):
-        raise ValueError("Package is missing its agent or skill entrypoint")
-    roots = [entrypoints[0], source_root / "skills/doc-agent"]
-    files: list[tuple[Path, Path]] = []
-    for root in roots:
-        candidates = [root] if root.is_file() else sorted(root.rglob("*"))
-        for path in candidates:
-            relative = path.relative_to(source_root)
-            if any(part in IGNORED_DIRS for part in relative.parts):
-                continue
-            if path.is_symlink():
-                raise ValueError(f"Package contains a symlink: {relative}")
-            if path.is_file() and path.suffix != ".pyc":
-                files.append((path, destination / relative))
+    files = [
+        (path, destination / path.relative_to(source_root)) for path in source_files(source_root)
+    ]
     pending: list[tuple[Path, Path]] = []
     conflicts = []
     for src, dest in files:

@@ -60,12 +60,30 @@ Use the site's existing build and preview process. For the optional smoke test, 
 ```sh
 npm exec --prefix "$DOC_AGENT_TOOLS" -- playwright install chromium
 DOC_AGENT_BASE_URL=http://127.0.0.1:8000/ \
+  DOC_AGENT_READY_SELECTOR='main[data-doc-ready="true"]' \
   npm --prefix "$DOC_AGENT_TOOLS" run test:site
 ```
 
-`DOC_AGENT_BASE_URL` is the only package-specific environment variable. It names one actual page to check; no default remote site is contacted. In PowerShell, set it with `$env:DOC_AGENT_BASE_URL = 'http://127.0.0.1:8000/'` before running the npm command.
+Set both variables before running the test:
+
+- `DOC_AGENT_BASE_URL` names the actual preview page; no default remote site is contacted.
+- `DOC_AGENT_READY_SELECTOR` must select exactly one visible element that proves the intended documentation content is ready. Replace the sample selector with your site's existing readiness marker. The example assumes the site sets `data-doc-ready="true"` on its `main` element after rendering the content. A loading wrapper, `body`, or a generic `main` selector does not establish that state.
+
+In PowerShell, set `$env:DOC_AGENT_BASE_URL = 'http://127.0.0.1:8000/'` and `$env:DOC_AGENT_READY_SELECTOR = 'main[data-doc-ready="true"]'` before running the npm command.
+
+The readiness selector is required, including for existing callers of this check. The test fails before navigation if it is missing or blank. Once navigation finishes, it waits up to 10 seconds for the selector to match one visible element, within the overall 30-second test timeout. Invalid, ambiguous, hidden, or absent matches fail the check; it never substitutes a different selector or a fixed sleep. No screenshot or axe report is produced before readiness is confirmed.
 
 The test checks HTTP success, visible page content, and axe's detectable accessibility issues, and records a screenshot and accessibility report. It does not crawl the site, start a server, authenticate, publish, or prove comprehensive accessibility. Inspect the screenshot and try the reader's task manually. Add representative pages and interactions to the project's existing tests when needed; avoid duplicating a mature browser-test setup.
+
+Maintainers can run `tests/browser_regression.py` from a checkout of the Doc Agent repository. Install the optional tools in that checkout so the suite tests its current site-check code:
+
+```sh
+npm ci --prefix .github/skills/doc-agent/tooling
+npm exec --prefix .github/skills/doc-agent/tooling -- playwright install chromium
+python3 tests/browser_regression.py
+```
+
+This repository-only suite is not copied by the agent installer. It exercises the actual site-check configuration against loopback-only fixtures, covering delayed clean and inaccessible content, missing/invalid/ambiguous selectors, and bounded readiness failures, including screenshot and report timing. The fixture server is temporary and does not contact a live service. These tests are separate from basic Python test discovery so optional browser dependencies remain optional.
 
 ## Authoritative references
 

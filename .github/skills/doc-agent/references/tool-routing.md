@@ -32,7 +32,7 @@ The [tooling guide](../tooling/README.md) describes explicit commands and prereq
 - Vale flags a small set of wordy alternatives. Project vocabulary and approved terminology are more valuable than a large generic rule set. Review suggestions rather than mechanically rewriting them.
 - markdownlint-cli2 checks Markdown structure and formatting. Existing project rules take precedence, and long lines are not automatically a readability defect.
 - Lychee checks links and anchors. Start with local/offline checks where suitable; external checks send requests and may be affected by authentication, throttling, or temporary failures.
-- Playwright plus axe can check an explicitly supplied documentation preview URL, capture a rendered page, and identify some accessibility problems. It cannot establish complete accessibility compliance or human understanding.
+- Playwright plus axe require an explicitly supplied preview URL and a unique visible readiness selector for the completed content. The check captures a rendered page and identifies some accessibility problems only after that signal. It cannot establish complete accessibility compliance or human understanding.
 
 Use tools only on relevant files and changes. Preserve meaningful errors; do not disable a rule merely to obtain a passing result. Explain intentional exceptions and decide whether the rule actually fits this project.
 

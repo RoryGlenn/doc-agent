@@ -22,6 +22,8 @@ python3 install.py --user --apply
 
 This adds `~/.copilot/agents/doc-agent.agent.md` and `~/.copilot/skills/doc-agent/`. It does not change editor settings, model choice, permissions, or existing project instructions. Existing identical files are skipped; any different destination file stops installation before copying begins. The installer never overwrites an existing file.
 
+The installer also stops if it cannot fully scan the source package or encounters an internal source symlink. Restore the missing access or use a complete, unlinked copy of the package before retrying; it will not report an incomplete source tree as installed.
+
 To install in a specific project instead:
 
 ```sh
@@ -82,6 +84,8 @@ ruff check install.py .github/skills/doc-agent/scripts tests
 ruff format --check install.py .github/skills/doc-agent/scripts tests
 mypy
 ```
+
+After setting up the [optional browser tools](.github/skills/doc-agent/tooling/README.md#website-preview-and-accessibility), run `python3 tests/browser_regression.py` to check readiness handling and saved evidence against local fixtures. Basic Python tests do not require these Node/browser dependencies. Site checks now require both a preview URL and a page-specific `DOC_AGENT_READY_SELECTOR`; the tooling guide explains how to choose the signal.
 
 The behavior fixtures evaluate content and decisions separately. Static package checks do not establish that Copilot has loaded the agent, that the account is signed in, or that every documentation task will succeed. Check discovery in VS Code and run a representative task.
 

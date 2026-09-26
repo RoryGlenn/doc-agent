@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -144,6 +147,81 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(list(self.destination.iterdir()), [keep])
         self.assertEqual(keep.read_text(), "keep")
 
+    def test_source_scan_failure_aborts_before_writes(self) -> None:
+        """Unreadable references fail both dry-run and apply without a partial install."""
+        references = self.skill.parent / "references"
+        references.mkdir()
+        (references / "essential.md").write_text("essential")
+        self.destination.mkdir(parents=True)
+        keep = self.destination / "keep.txt"
+        keep.write_text("keep")
+        before = keep.stat().st_mtime_ns
+        original_scandir = os.scandir
+
+        def deny_references(path: Any) -> Any:
+            """Simulate a directory-read failure even under privileged CI users."""
+            if Path(path) == references:
+                raise PermissionError("Cannot read references")
+            return original_scandir(path)
+
+        for apply in (False, True):
+            with self.subTest(apply=apply), patch.object(os, "scandir", deny_references):
+                with self.assertRaises(PermissionError):
+                    installer.install_files(self.source, self.destination, apply)
+            self.assertEqual(list(self.destination.iterdir()), [keep])
+            self.assertEqual(keep.read_text(), "keep")
+            self.assertEqual(keep.stat().st_mtime_ns, before)
+
+    def test_ignored_dependencies_are_pruned_before_scanning(self) -> None:
+        """An intentionally ignored unreadable cache never enters source traversal."""
+        ignored = self.skill.parent / "node_modules"
+        ignored.mkdir()
+        original_scandir = os.scandir
+        visited: list[Path] = []
+
+        def record_scan(path: Any) -> Any:
+            """Record scan boundaries and simulate an inaccessible dependency cache."""
+            visited.append(Path(path))
+            if Path(path) == ignored:
+                raise PermissionError("Ignore this cache")
+            return original_scandir(path)
+
+        with patch.object(os, "scandir", record_scan):
+            installer.install_files(self.source, self.destination, True)
+        self.assertNotIn(ignored, visited)
+        self.assertEqual((self.destination / "skills/doc-agent/SKILL.md").read_text(), "skill\n")
+
+    def test_internal_source_roots_cannot_be_symlinks(self) -> None:
+        """Root and ancestor links cannot import files from an external directory."""
+        for relative in (".github", ".github/agents", ".github/skills", ".github/skills/doc-agent"):
+            with self.subTest(relative=relative):
+                source = self.root / ("case-" + relative.replace("/", "-"))
+                agent = source / ".github/agents/doc-agent.agent.md"
+                skill = source / ".github/skills/doc-agent/SKILL.md"
+                agent.parent.mkdir(parents=True)
+                skill.parent.mkdir(parents=True)
+                agent.write_text("agent")
+                skill.write_text("skill")
+                (skill.parent / "private.txt").write_text("external content")
+                linked = source / relative
+                outside = self.root / ("external-" + relative.replace("/", "-"))
+                linked.rename(outside)
+                linked.symlink_to(outside, target_is_directory=True)
+                for apply in (False, True):
+                    with self.assertRaises(ValueError):
+                        installer.install_files(source, self.destination, apply)
+                self.assertFalse(self.destination.exists())
+
+    def test_nested_source_directory_symlink_is_rejected(self) -> None:
+        """A linked subtree also fails before the agent file is installed."""
+        outside = self.root / "external-references"
+        outside.mkdir()
+        (outside / "essential.md").write_text("external content")
+        (self.skill.parent / "references").symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(ValueError):
+            installer.install_files(self.source, self.destination, True)
+        self.assertFalse(self.destination.exists())
+
 
 class DiscoveryTests(unittest.TestCase):
     """Check bounded, non-executing project inspection."""
@@ -261,6 +339,23 @@ class DiscoveryTests(unittest.TestCase):
         """A missing root returns a meaningful input error."""
         with self.assertRaises(ValueError):
             doctor.inspect_project(self.root / "missing")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "Named pipes require POSIX mkfifo")
+    def test_fifo_manifest_returns_without_blocking(self) -> None:
+        """A real FIFO is skipped, with a subprocess timeout bounding regressions."""
+        os.mkfifo(self.root / "package.json")
+        checker = ROOT / ".github/skills/doc-agent/scripts/check_environment.py"
+        result = subprocess.run(
+            [sys.executable, "-B", str(checker), "--project", str(self.root), "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["commands"], [])
+        self.assertIn("Skipped non-regular manifest: package.json", report["warnings"])
 
 
 if __name__ == "__main__":
