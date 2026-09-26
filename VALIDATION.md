@@ -1,6 +1,6 @@
 # Validation record — 26 September 2026
 
-This records validation of the initial Copilot package before repository publication. That package contained 31 reviewed source/configuration files plus this record. Repository preparation subsequently added `.gitignore` and adjusted the README and this introduction for public use. The checks below describe the tested package; later repository changes should receive their own validation.
+This records validation of the initial Copilot package before repository publication. That package contained 31 reviewed source/configuration files plus this record. Repository preparation subsequently added `.gitignore` and adjusted the README and this introduction for public use. The checks below describe the tested package; later repository changes should receive their own validation using the commands in [README.md § Validate the package](README.md#validate-the-package).
 
 ## Result
 

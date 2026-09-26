@@ -85,6 +85,8 @@ mypy
 
 The behavior fixtures evaluate content and decisions separately. Static package checks do not establish that Copilot has loaded the agent, that the account is signed in, or that every documentation task will succeed. Check discovery in VS Code and run a representative task.
 
+[VALIDATION.md](VALIDATION.md) records the independent verification performed on the initial package, including the tested environment and its limits. Rerun the commands above, and the optional checks in the [tooling guide](.github/skills/doc-agent/tooling/README.md) where installed, after making further changes; that record does not cover changes made after repository publication.
+
 ## Platform references
 
 - [VS Code custom-agent files and locations](https://code.visualstudio.com/docs/agent-customization/custom-agents)
