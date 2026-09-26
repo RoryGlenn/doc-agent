@@ -1,0 +1,22 @@
+# Local environments and dependency caches
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Generated browser and coverage artifacts
+test-results/
+playwright-report/
+coverage/
+.coverage
+
+# Local credentials and operating-system metadata
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
